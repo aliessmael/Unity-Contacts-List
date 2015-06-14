@@ -238,9 +238,9 @@ extern "C" {
             c->emails = [NSMutableArray new];
             ABMultiValueRef emails = ABRecordCopyValue(c->person, kABPersonEmailProperty);
             for (CFIndex j=0; j < ABMultiValueGetCount(emails); j++) {
-                NSString* email = (NSString*)ABMultiValueCopyValueAtIndex(emails, j);
+                NSString* email = (__bridge NSString*)ABMultiValueCopyValueAtIndex(emails, j);
                 [c->emails addObject:email];
-                [email release];
+                //[email release];
             }
             CFRelease(emails);
             c->emailsInitialized =true;
