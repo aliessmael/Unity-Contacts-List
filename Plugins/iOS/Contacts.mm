@@ -13,16 +13,10 @@
 
 @end
 
-NSString* CreateNSString (const char* string)
-{
-	if (string)
-		return [NSString stringWithUTF8String: string];
-	else
-		return [NSString stringWithUTF8String: ""];
-}
+
 
 // Helper method to create C string copy
-char* MakeStringCopy (const char* string)
+char* aliessmael_MakeStringCopy (const char* string)
 {
 	if (string == NULL)
 		return NULL;
@@ -171,21 +165,21 @@ extern "C" {
     
     char* GetMyPhoneNumber()
     {
-        return MakeStringCopy("");
+        return aliessmael_MakeStringCopy("");
     }
     char* GetSimSerialNumber()
     {
-        return MakeStringCopy("");
+        return aliessmael_MakeStringCopy("");
     }
 	
 	char* GetNetworkOperator()
     {
-        return MakeStringCopy("");
+        return aliessmael_MakeStringCopy("");
     }
 	
 	char* GetNetworkCountryIso()
     {
-        return MakeStringCopy("");
+        return aliessmael_MakeStringCopy("");
     }
 	
 	int GetContactsCount()
@@ -197,7 +191,7 @@ extern "C" {
 	
 	char* GetContactId( int id )
     {
-        return MakeStringCopy("");
+        return aliessmael_MakeStringCopy("");
     }
 	
 	char* GetContactName( int index )
@@ -206,7 +200,7 @@ extern "C" {
         NSString* f = (c->firstName == NULL)?[[NSString alloc]init]:c->firstName ;
         NSString* s = (c->lastName == NULL)?[[NSString alloc]init]:c->lastName ;
         NSString* name = [NSString stringWithFormat:@"%@ %@",f,s];
-        return MakeStringCopy([name UTF8String]);
+        return aliessmael_MakeStringCopy([name UTF8String]);
     }
 	
     int GetContactNumberCount( int index )
@@ -218,17 +212,17 @@ extern "C" {
     {
         ContactItem* c = [contactItems objectAtIndex:index];
         if( c->phoneNumber == nil || c->phoneNumber.count == 0 )
-            return MakeStringCopy([@"empty" UTF8String]);
+            return aliessmael_MakeStringCopy([@"empty" UTF8String]);
         NSString* text = [c->phoneNumber objectAtIndex:phoneId];
-        return MakeStringCopy([text UTF8String]);
+        return aliessmael_MakeStringCopy([text UTF8String]);
     }
 	char* GetContactNumberType( int index , int phoneId )
 	{
 		ContactItem* c = [contactItems objectAtIndex:index];
         if( c->phoneNumberType == nil || c->phoneNumberType.count == 0 )
-            return MakeStringCopy([@"empty" UTF8String]);
+            return aliessmael_MakeStringCopy([@"empty" UTF8String]);
         NSString* text = [c->phoneNumberType objectAtIndex:phoneId];
-        return MakeStringCopy([text UTF8String]);
+        return aliessmael_MakeStringCopy([text UTF8String]);
 	}
     int GetEmailsCount( int index )
     {
@@ -238,7 +232,7 @@ extern "C" {
             c->emails = [NSMutableArray new];
             ABMultiValueRef emails = ABRecordCopyValue(c->person, kABPersonEmailProperty);
             for (CFIndex j=0; j < ABMultiValueGetCount(emails); j++) {
-                NSString* email = (__bridge NSString*)ABMultiValueCopyValueAtIndex(emails, j);
+                NSString* email = ( __bridge NSString*)ABMultiValueCopyValueAtIndex(emails, j);
                 [c->emails addObject:email];
                 //[email release];
             }
@@ -252,9 +246,9 @@ extern "C" {
     {
         ContactItem* c = [contactItems objectAtIndex:index];
         if( c->emails == nil || c->emails.count == 0 )
-            return MakeStringCopy([@"empty" UTF8String]);
+            return aliessmael_MakeStringCopy([@"empty" UTF8String]);
         NSString* text = [c->emails objectAtIndex:emailId];
-        return MakeStringCopy([text UTF8String]);
+        return aliessmael_MakeStringCopy([text UTF8String]);
     }
 	
 	char* GetContactPhoto( int index )
@@ -269,14 +263,14 @@ extern "C" {
                     NSData * data = (__bridge NSData *)ABPersonCopyImageDataWithFormat(c->person, kABPersonImageFormatThumbnail);
                     NSString *im = [data base64Encoding] ;
                     const char* imc = [ im UTF8String ];
-                    c->image = MakeStringCopy(imc) ;
+                    c->image = aliessmael_MakeStringCopy(imc) ;
                     // iOS >= 4.1
                     // img= [UIImage imageWithData:(__bridge NSData *)ABPersonCopyImageDataWithFormat(c->person, kABPersonImageFormatThumbnail)];
                 } else {
                     NSData * data = (__bridge NSData *)ABPersonCopyImageData(c->person);
                     NSString *im = [data base64Encoding] ;
                     const char* imc = [ im UTF8String ];
-                    c->image = MakeStringCopy(imc);
+                    c->image = aliessmael_MakeStringCopy(imc);
                     // iOS < 4.1
                     //img= [UIImage imageWithData:(__bridge NSData *)ABPersonCopyImageData(c->person)];
                 }

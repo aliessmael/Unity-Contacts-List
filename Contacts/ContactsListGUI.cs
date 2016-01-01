@@ -56,7 +56,7 @@ public class ContactsListGUI : MonoBehaviour {
 		contactFaceStyle = new GUIStyle();
 		contactFaceStyle.fixedHeight = size.y ;
 		contactFaceStyle.fixedWidth  = size.y ;
-		contactFaceStyle.normal.background = contact_faceTexture;
+		//contactFaceStyle.normal.background = contact_faceTexture;
 
 		nonStyle2 = new GUIStyle();
 		nonStyle2.clipping = TextClipping.Clip;
@@ -143,6 +143,7 @@ public class ContactsListGUI : MonoBehaviour {
 	Vector2 oldContactsDrag ;
 	void OnGUI()
 	{
+
 		getDownPos();
 
 		Vector2 drag = getDrag(); 
@@ -200,26 +201,36 @@ public class ContactsListGUI : MonoBehaviour {
 				GUILayout.BeginHorizontal( oddContactStyle ,GUILayout.Width( size.x) , GUILayout.Height( size.y ));
 			GUILayout.Label( i.ToString() , style );
 			Contact c = Contacts.ContactsList[i];
-			if( c.PhotoTexture != null )
+			if( !c.PhotoIsLoaded )
 			{
+				Contacts.LoadAsyncContactPhoto( i );
+			}
+			if( c.Photo != null )
+			{
+				
+				if( c.Photo != null && c.PhotoTexture == null )
+				{
+					c.PhotoTexture = new Texture2D(4,4);
+					c.PhotoTexture.LoadImage( c.Photo );
+				}
 				GUILayout.Box( new GUIContent(c.PhotoTexture) , GUILayout.Width(size.y), GUILayout.Height(size.y));
 			}
 			else {
 				GUILayout.Box( new GUIContent(contactFaceStyle.normal.background) , GUILayout.Width(size.y), GUILayout.Height(size.y));
 			}
 
-			string text = c.FirstName +" "+ c.LastName + "\n";
+			string text = "Name : " + c.Name + "\n";
 			for(int p = 0 ; p < c.Phones.Count ; p++)
 			{
-				text +=  c.PhoneType[p] + " : " + c.Phones[p]  + " \n";
+				text +=  "Number : " + c.Phones[p].Number + " , Type " + c.Phones[p].Type  + " \n";
 			}
-			for(int e = 0 ; e < c.Emailes.Count ; e++)
-				text +=  "email  : " + c.Emailes[e] + "\n"; 
+			for(int e = 0 ; e < c.Emails.Count ; e++)
+				text +=  "Email  : " + c.Emails[e].Address + " : Type " + c.Emails[e].Type + "\n"; 
 			for(int e = 0 ; e < c.Connections.Count ; e++)
 				text += "Connection : " + c.Connections[e] + "\n";
 			text += "------------------";
 			GUILayout.Label(  text , style , GUILayout.Width(size.x - size.y - 40 ) );
-
+			GUILayout.Space(50);
 			GUILayout.EndHorizontal();
 		}
 		int afterHeight = (int)((Contacts.ContactsList.Count - ( startIndex + 6 ))*size.y) ;

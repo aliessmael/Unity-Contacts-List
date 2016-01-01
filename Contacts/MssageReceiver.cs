@@ -10,6 +10,11 @@ public class MssageReceiver : MonoBehaviour {
 		Contacts.OnInitializeDone ();
 	}
 
+	void Log( string message )
+	{
+		Debug.Log( "internal log : " + message );
+	}
+
 	void Error( string error )
 	{
 		Debug.LogError( "internal error : " + error );

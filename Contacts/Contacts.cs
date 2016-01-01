@@ -4,27 +4,35 @@ using System.Text;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Threading;
+
+
+
+public class PhoneContact
+{
+	public string Number ;
+	public string Type ;
+}
+
+public class EmailContact
+{
+	public string Address;
+	public string Type ;
+}
 
 //holder of person details
 public class Contact
 {
-	public string FirstName ;
-	public string LastName ;
-	public byte[] Photo ;
+	public string Id ;
+	public string Name ;
+	public byte[] 	 Photo;
 	public Texture2D PhotoTexture ;
-	public List<string> Phones 	  = new List<string>();
-	public List<string> PhoneType = new List<string>();//mobile,home,work,...
-	public List<string> Emailes   = new List<string>();
+	public bool		 PhotoIsLoaded = false;
+	public List<PhoneContact> Phones = new List<PhoneContact>();
+	public List<EmailContact> Emails = new List<EmailContact>();
+	
 	public List<string> Connections = new List<string>();//for android only. example(google,whatsup,...)
-	//To Do
-	/*public string Company ;
-	public List<string> URls 	= new List<string>();
-	public List<string> Address = new List<string>();
-	public String		Birthday ;
-	public String 		Note ;
-	public List<string> SocialProfiles = new List<string>();
-	public List<string> Data = new List<string>();*/
-
+	
 }
 //holder for all contacts information of your mobile
 //use this class to acces all mobile contacts information
@@ -69,23 +77,23 @@ public class Contacts{
 		for( int i = 0 ; i < count ; i++ )
 		{
 			Contact c = new Contact();
-			c.FirstName = GetContactName(i);
+			c.Name = GetContactName(i);
 			int phonesCount = GetContactNumberCount(i);
 			for(int p = 0 ; p < phonesCount ; p++ )
 			{
-				string phone = GetContactNumber(i,p);
-				//if( !c.Phones.Contains(phone))
-					c.Phones.Add( phone );
-				string phoneType = GetContactNumberType(i,p);
-				//if( !c.PhoneType.Contains(phoneType))
-					c.PhoneType.Add( phoneType ); 
+				PhoneContact pc = new PhoneContact();
+				pc.Number = GetContactNumber(i,p);
+				pc.Type = GetContactNumberType(i,p);
+
+				c.Phones.Add( pc);
 			}
 			int emailsCount = GetEmailsCount(i);
 			for(int e = 0 ; e < emailsCount ; e++ )
 			{
-				string email = GetEmail(i,e);
-				if( !c.Emailes.Contains(email))
-					c.Emailes.Add( email );
+				EmailContact ec = new EmailContact();
+				ec.Address = GetEmail(i,e);
+
+				c.Emails.Add( ec );
 			}
 			string photo = GetContactPhoto(i);
 			if( !string.IsNullOrEmpty( photo ) )
@@ -97,6 +105,9 @@ public class Contacts{
 			}
 			ContactsList.Add(c);
 		}
+	}
+	public static void LoadAsyncContactPhoto( int id )
+	{
 	}
 	[DllImport("__Internal")]
 	private static extern void _LoadContactList();
@@ -187,17 +198,33 @@ public class Contacts{
 		int value = ojc.CallStatic<int>("GetEmailsCount" , id);
 		return value ;
 	}
-	public static String GetEmail( int id , int emailId )
+	public static String GetEmailAdress( int id , int emailId )
 	{
-		String text = ojc.CallStatic<String>("GetEmail" , id , emailId );
+		String text = ojc.CallStatic<String>("GetEmailAdress" , id , emailId );
 		return text ;
 	}
-	public static byte[] GetContactPhoto( int id )
+	public static String GetEmailType( int id , int emailId )
 	{
-		String photo = ojc.CallStatic<String>("GetContactPhoto" , id);
-		if( string.IsNullOrEmpty(photo))
-			return null ;
-		return System.Convert.FromBase64String( photo ) ;
+			String text = ojc.CallStatic<String>("GetEmailType" , id , emailId );
+			return text ;
+	}
+	public static void LoadAsyncContactPhoto( int id )
+	{
+		Contact c = ContactsList[id];
+		if( c.PhotoIsLoaded )
+			return;
+		activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+		{
+			String photo = ojc.CallStatic<String>("GetContactPhoto" , id);
+			c.PhotoIsLoaded = true ;
+			if( string.IsNullOrEmpty(photo))
+			{
+				return;
+			}
+			c.Photo = System.Convert.FromBase64String( photo ) ;
+		}));
+		
+		
 	}
 	public static int GetContactConnectionsCount( int id )
 	{
@@ -210,6 +237,7 @@ public class Contacts{
 		return value ;
 	}
 
+	static AndroidJavaObject activity;
 	public static void LoadContactList()
 	{
 #if UNITY_EDITOR
@@ -221,94 +249,107 @@ public class Contacts{
 		helper.name = "ContactsListMessageReceiver";
 		helper.AddComponent<MssageReceiver> ();
 
-		ojc = new AndroidJavaClass("com.cloudsoft.contactslist.ContactList");
-
-		AndroidJavaClass jc = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-		AndroidJavaObject jo = jc.GetStatic<AndroidJavaObject>("currentActivity");
-		//jo.Call("launchAndroidActivity");
-		float total = Time.realtimeSinceStartup ;
-		float t = Time.realtimeSinceStartup ;
-		ojc.CallStatic("LoadInformation" , jo );
-		t = Time.realtimeSinceStartup - t ;
-		Debug.Log("LoadInformation tooks          " + t.ToString("0.00") + " sec");
-		MyPhoneNumber = GetMyPhoneNumber();
-		SimSerialNumber = GetSimSerialNumber();
-		NetworkOperator = GetNetworkOperator();
-		NetworkCountryIso = GetNetworkCountryIso();
-
-		int count = GetContactsCount();
-		Debug.Log("GetContactsCount give " + count + " contacts");
-		t = Time.realtimeSinceStartup ;
-		for( int i = 0 ; i < count ; i++ )
+		try
 		{
-			Contact c = new Contact();
-			c.FirstName = GetContactName(i);
-			ContactsList.Add(c);
-		}
-		t = Time.realtimeSinceStartup - t ;
-		Debug.Log("Load Names tooks          " + t.ToString("0.00") + " sec");
 
-		t = Time.realtimeSinceStartup ;
-		for( int i = 0 ; i < count ; i++ )
-		{
-			Contact c = ContactsList[i];
-			int phonesCount = GetContactNumberCount(i);
-			for(int p = 0 ; p < phonesCount ; p++ )
-				c.Phones.Add( GetContactNumber(i,p));
-			for(int p = 0 ; p < phonesCount ; p++ )
-				c.PhoneType.Add( GetContactNumberType(i,p));
-		}
-		t = Time.realtimeSinceStartup - t ;
-		Debug.Log("Load Phones tooks          " + t.ToString("0.00") + " sec");
-
-		t = Time.realtimeSinceStartup ;
-		for( int i = 0 ; i < count ; i++ )
-		{
-			Contact c = ContactsList[i];
-			int emailsCount = GetEmailsCount(i);
-			for(int e = 0 ; e < emailsCount ; e++ )
-				c.Emailes.Add( GetEmail(i,e));
-		}
-		t = Time.realtimeSinceStartup - t ;
-		Debug.Log("Load Emailes tooks          " + t.ToString("0.00") + " sec");
-
-		t = Time.realtimeSinceStartup ;
-		for( int i = 0 ; i < count ; i++ )
-		{
-			Contact c = ContactsList[i];
-			c.Photo 	= GetContactPhoto(i);
-			if( c.Photo != null )
+			ojc = new AndroidJavaClass("com.aliessmael.contactslist.ContactList");
+			
+			AndroidJavaClass jc = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+			activity = jc.GetStatic<AndroidJavaObject>("currentActivity");
+			//jo.Call("launchAndroidActivity");
+			float total = Time.realtimeSinceStartup ;
+			float t = Time.realtimeSinceStartup ;
+			
+			/*activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
 			{
-				c.PhotoTexture = new Texture2D(4,4);
-				c.PhotoTexture.LoadImage(c.Photo);
+				
+			}));*/
+
+			ojc.CallStatic("LoadInformation" , activity , false, true,true,true);
+			t = Time.realtimeSinceStartup - t ;
+			Debug.Log("LoadInformation tooks          " + t.ToString("0.00") + " sec");
+			MyPhoneNumber = GetMyPhoneNumber();
+			SimSerialNumber = GetSimSerialNumber();
+			NetworkOperator = GetNetworkOperator();
+			NetworkCountryIso = GetNetworkCountryIso();
+
+			int count = GetContactsCount();
+			Debug.Log("GetContactsCount give " + count + " contacts");
+			t = Time.realtimeSinceStartup ;
+			for( int i = 0 ; i < count ; i++ )
+			{
+				Contact c = new Contact();
+				c.Name = GetContactName(i);
+				ContactsList.Add(c);
 			}
-		}
-		t = Time.realtimeSinceStartup - t ;
-		Debug.Log("Load Photos tooks          " + t.ToString("0.00") + " sec");
+			t = Time.realtimeSinceStartup - t ;
+			Debug.Log("Load Names tooks          " + t.ToString("0.00") + " sec");
 
-		t = Time.realtimeSinceStartup ;
-		for( int i = 0 ; i < count ; i++ )
+			t = Time.realtimeSinceStartup ;
+			for( int i = 0 ; i < count ; i++ )
+			{
+				Contact c = ContactsList[i];
+				int phonesCount = GetContactNumberCount(i);
+				for(int p = 0 ; p < phonesCount ; p++ )
+				{
+					string number = GetContactNumber(i,p);
+					string type = GetContactNumberType(i,p);
+					c.Phones.Add( new PhoneContact(){ Number=number, Type=type});
+				}
+				
+			}
+			t = Time.realtimeSinceStartup - t ;
+			Debug.Log("Load Phones tooks          " + t.ToString("0.00") + " sec");
+
+			t = Time.realtimeSinceStartup ;
+			for( int i = 0 ; i < count ; i++ )
+			{
+				Contact c = ContactsList[i];
+				int emailsCount = GetEmailsCount(i);
+				for(int e = 0 ; e < emailsCount ; e++ )
+				{
+					string address = GetEmailAdress(i,e);
+					string type = GetEmailType(i,e);
+					c.Emails.Add( new EmailContact(){ Address=address, Type = type});
+				}
+			}
+			t = Time.realtimeSinceStartup - t ;
+			Debug.Log("Load Emailes tooks          " + t.ToString("0.00") + " sec");
+
+			/*t = Time.realtimeSinceStartup ;
+			for( int i = 0 ; i < count ; i++ )
+			{
+				Contact c = ContactsList[i];
+				GetContactPhoto(i);
+
+			}
+			t = Time.realtimeSinceStartup - t ;
+			Debug.Log("Load Photos tooks          " + t.ToString("0.00") + " sec");*/
+
+			t = Time.realtimeSinceStartup ;
+			for( int i = 0 ; i < count ; i++ )
+			{
+				Contact c = ContactsList[i];
+				int connectionsCount = GetContactConnectionsCount(i);
+				for(int j = 0 ; j < connectionsCount ; j++ )
+					c.Connections.Add( GetContactConnection(i,j));
+			}
+			t = Time.realtimeSinceStartup - t ;
+			Debug.Log("Load Types tooks          " + t.ToString("0.00") + " sec");
+
+			total = Time.realtimeSinceStartup - total ;
+			Debug.Log("Total load tooks          : " + total.ToString("0.00") + " sec");
+
+		}
+		catch( System.Exception e )
 		{
-			Contact c = ContactsList[i];
-			int connectionsCount = GetContactConnectionsCount(i);
-			for(int j = 0 ; j < connectionsCount ; j++ )
-				c.Connections.Add( GetContactConnection(i,j));
+			Debug.LogException( e );
 		}
-		t = Time.realtimeSinceStartup - t ;
-		Debug.Log("Load Types tooks          " + t.ToString("0.00") + " sec");
-
-		total = Time.realtimeSinceStartup - total ;
-		Debug.Log("Total load tooks          : " + total.ToString("0.00") + " sec");
-		//To improve load time dont fill data you dont need, for example remove this block
-		//int emailsCount = GetEmailsCount(i);
-		//for(int e = 0 ; e < emailsCount ; e++ )
-		//	c.Emailes.Add( GetEmail(i,e));
-		// if you dont care about mailes or
-		// c.Type = GetContactType( i ); if you dont care about type 
-		// or load them once it is needed
-	
 		#endif
 	}
+
+
+
 	public static void OnInitializeDone()
 	{
 	}
@@ -320,6 +361,9 @@ public class Contacts{
 	public static void OnInitializeDone()
 	{
 	}
+	public static void LoadAsyncContactPhoto( int id )
+	{
+	}
 #endif
 	static void test()
 	{
@@ -328,12 +372,11 @@ public class Contacts{
 		for( int i = 0 ; i < 300 ; i++ )
 		{
 			Contact c = new Contact();
-			c.FirstName = "Test name " + i ;
-			c.LastName = "Last Name" ;
+			
+			c.Name = "Test name " + i;
 			for( int p = 0 ; p < 3 ; p++ )
 			{
-				c.Phones.Add("+34235334244!");
-				c.PhoneType.Add("Type Test");
+				c.Phones.Add( new PhoneContact{ Number = "+34235334244!", Type = "Type Test"});
 			}
 			ContactsList.Add( c );
 		}
