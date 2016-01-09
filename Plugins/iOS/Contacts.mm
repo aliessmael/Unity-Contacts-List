@@ -28,16 +28,14 @@ char* aliessmael_MakeStringCopy (const char* string)
 
 @interface ContactItem :NSObject
 {
-@public ABRecordRef person;
-@public NSString *firstName ;
-@public NSString *lastName;
-@public ABMultiValueRef phoneNumbersRef;
-@public NSMutableArray *phoneNumber;
-@public NSMutableArray *phoneNumberType;
-@public bool  emailsInitialized ;
-@public NSMutableArray *emails;
-@public bool  imageInitialized ;
-@public char* image;
+    @public ABRecordRef person;
+    
+    @public NSString *name ;
+    @public ABMultiValueRef phoneNumbersRef;
+    @public NSMutableArray *phoneNumber;
+    @public NSMutableArray *phoneNumberType;
+    @public NSMutableArray *emails;
+    @public NSData* image;
 };
 @end
 @implementation ContactItem
@@ -50,31 +48,185 @@ extern "C" {
     NSMutableArray* contactItems;
     ABAddressBookRef addressBook;
     
-    void checkForRelease()
+    
+    void contact_log( const char* message)
     {
-        if( addressBook )
-        {
-            for( int i = 0 ; i < contactItems.count ; i ++ )
-            {
-                ContactItem* c = [contactItems objectAtIndex:i];
-                if( c->imageInitialized == false )
-                    return;
-                if( c->emailsInitialized == false )
-                    return;
-            }
-            CFRelease(addressBook);
-            CFRelease(allPeople);
-            addressBook = NULL;
+        UnitySendMessage("ContactsListMessageReceiver", "Log", message );
+    }
+    
+    void contact_error( char* error)
+    {
+        UnitySendMessage("ContactsListMessageReceiver", "Error", error );
+    }
+    
+    void contact_loadName( ContactItem* c )
+    {
+        NSString* firstName = (__bridge NSString *)(ABRecordCopyValue(c->person,kABPersonFirstNameProperty));
+        NSString* lastName = (__bridge NSString *)(ABRecordCopyValue(c->person, kABPersonLastNameProperty));
+        
+        NSString* f = ( firstName == NULL)?[[NSString alloc]init]:firstName ;
+        NSString* s = ( lastName == NULL)?[[NSString alloc]init]:lastName ;
+        
+        c->name = [NSString stringWithFormat:@"%@ %@",f,s];
+        //c->name = aliessmael_MakeStringCopy([name UTF8String]);
+        //return aliessmael_MakeStringCopy([name UTF8String]);
+    }
+    
+    void contact_loadPhoneNumbers( ContactItem* c )
+    {
+        c->phoneNumbersRef = ABRecordCopyValue(c->person, kABPersonPhoneProperty);
+        long phonesCount = ABMultiValueGetCount(c->phoneNumbersRef);
+        c->phoneNumber = [NSMutableArray new];
+        c->phoneNumberType = [NSMutableArray new];
+        for (CFIndex i = 0; i < phonesCount ;i++) {
+            NSString *phoneNumber = (__bridge NSString *) ABMultiValueCopyValueAtIndex(c->phoneNumbersRef, i);
+            [c->phoneNumber addObject:phoneNumber];
+            
+            CFStringRef locLabel = ABMultiValueCopyLabelAtIndex(c->phoneNumbersRef, i);
+            NSString* phoneLabel = (__bridge NSString*) ABAddressBookCopyLocalizedLabel(locLabel);
+            [c->phoneNumberType addObject:phoneLabel];
         }
     }
     
-    void listContacts()
+    void contact_loadEmails( ContactItem* c )
+    {
+        c->emails = [NSMutableArray new];
+        ABMultiValueRef emails = ABRecordCopyValue(c->person, kABPersonEmailProperty);
+        for (CFIndex j=0; j < ABMultiValueGetCount(emails); j++) {
+            NSString* email = ( __bridge NSString*)ABMultiValueCopyValueAtIndex(emails, j);
+            [c->emails addObject:email];
+            //[email release];
+        }
+        CFRelease(emails);
+    }
+    
+    void contact_loadPhoto( ContactItem* c )
+    {
+        UIImage *img = nil;
+        c->image = nil;
+        if (c->person != nil && ABPersonHasImageData(c->person)) {
+            if ( &ABPersonCopyImageDataWithFormat != nil ) {
+                NSData * data = (__bridge NSData *)ABPersonCopyImageDataWithFormat(c->person, kABPersonImageFormatThumbnail);
+                
+                c->image = data;
+                
+            } else {
+                NSData * data = (__bridge NSData *)ABPersonCopyImageData(c->person);
+                c->image = data;
+                
+            }
+            //CFRelease( img );
+            
+        } else {
+            img= nil;
+            c->image = nil;
+        }
+        
+    }
+    
+    void contact_writeString( NSOutputStream *oStream, NSString* str )
+    {
+        if( str == NULL )
+        {
+            short size = 0;
+            [oStream write:(uint8_t *)&size maxLength:2];
+        }
+        else
+        {
+            const char* data = [str UTF8String];
+            short size = strlen( data);
+            //short size = sizeof(data)/ sizeof(char);
+            [oStream write:(uint8_t *)&size maxLength:2];
+            [oStream write:(uint8_t *)data maxLength:size];
+            
+        }
+    }
+    
+    const char* contact_toBytes( ContactItem* c )
+    {
+        
+        NSOutputStream *oStream = [[NSOutputStream alloc] initToMemory];
+        [oStream open];
+        
+        contact_writeString( oStream, NULL);//native id
+        contact_writeString( oStream, c->name );
+        
+        short size = 0;
+        if( c->image == NULL)
+        {
+            [oStream write:(uint8_t *)&size maxLength:2];
+        }
+        else
+        {
+            size = c->image.length;
+            [oStream write:(uint8_t *)&size maxLength:2];
+            uint8_t * data = (uint8_t *)[c->image bytes];
+            [oStream write: data maxLength:size];
+        }
+        
+        if( c->phoneNumber == NULL)
+        {
+            size = 0;
+            [oStream write:(uint8_t *)&size maxLength:2];
+        }
+        else
+        {
+            size = c->phoneNumber.count;
+            [oStream write:(uint8_t *)&size maxLength:2];
+            for (int i = 0; i < size; i++)
+            {
+                NSString* text1 = [c->phoneNumber objectAtIndex:i];
+                contact_writeString( oStream, text1 );
+                NSString* text2 = [c->phoneNumberType objectAtIndex:i];
+                contact_writeString( oStream, text2 );
+            }
+        }
+        
+        if( c->emails == NULL)
+        {
+            size = 0;
+            [oStream write:(uint8_t *)&size maxLength:2];
+        }
+        else
+        {
+            size = c->emails.count;
+            [oStream write:(uint8_t *)&size maxLength:2];
+            for (int i = 0; i < size; i++)
+            {
+                NSString* text = [c->emails objectAtIndex:i];
+                contact_writeString( oStream, text );
+                contact_writeString( oStream, NULL );
+            }
+        }
+        
+        size = 0;
+        [oStream write:(uint8_t *)&size maxLength:2];
+        
+        
+        
+        NSData *contents = [oStream propertyForKey:NSStreamDataWrittenToMemoryStreamKey];
+        [oStream close];
+        NSString* str = [contents base64Encoding];
+        return [str UTF8String];
+    }
+    
+    char* getContact( int index )
+    {
+        //NSString* d = [NSString stringWithFormat:@"Get contact of index : %d", index];
+        //contact_log([d UTF8String]);
+        ContactItem* c = [contactItems objectAtIndex:index];
+        const char* data = contact_toBytes(c);
+        return aliessmael_MakeStringCopy(data) ;
+    }
+    
+    
+    void contact_listContacts()
     {
         //ABRecordRef source = ABAddressBookCopyDefaultSource(addressBook);
         allPeople = ABAddressBookCopyArrayOfAllPeopleInSourceWithSortOrdering(addressBook, nil, kABPersonSortByFirstName);
         nPeople = ABAddressBookGetPersonCount( addressBook );
         // NSLog( @"error %@" , *error );
-        NSLog( @"cont %ld" , nPeople );
+       // NSLog( @"cont %ld" , nPeople );
         contactItems = [NSMutableArray new];
         for ( int i = 0; i < nPeople; i++ )
         {
@@ -82,40 +234,38 @@ extern "C" {
             c->person = CFArrayGetValueAtIndex( allPeople, i );
 			if( c->person == nil)
 			{
-				NSLog( @"contact %ld is empty" , i );
+				NSLog( @"contact %d is empty" , i );
 				continue;
 			}
-            c->firstName = (__bridge NSString *)(ABRecordCopyValue(c->person,kABPersonFirstNameProperty));
-            c->lastName = (__bridge NSString *)(ABRecordCopyValue(c->person, kABPersonLastNameProperty));
+           
+            contact_loadName( c );
             
-            c->phoneNumbersRef = ABRecordCopyValue(c->person, kABPersonPhoneProperty);
-            int phonesCount = ABMultiValueGetCount(c->phoneNumbersRef);
-            c->phoneNumber = [NSMutableArray new];
-			c->phoneNumberType = [NSMutableArray new];
-            for (CFIndex i = 0; i < phonesCount ;i++) {
-                NSString *phoneNumber = (__bridge NSString *) ABMultiValueCopyValueAtIndex(c->phoneNumbersRef, i);
-                [c->phoneNumber addObject:phoneNumber];
-                
-                CFStringRef locLabel = ABMultiValueCopyLabelAtIndex(c->phoneNumbersRef, i);
-				 NSString* phoneLabel = (__bridge NSString*) ABAddressBookCopyLocalizedLabel(locLabel);
-				 [c->phoneNumberType addObject:phoneLabel];
-            }
+            contact_loadPhoneNumbers( c);
             
-            c->imageInitialized = false ;
-            c->emailsInitialized = false ;
+            contact_loadPhoto( c );
             
             
             [contactItems addObject:c];
+            
+            NSString *idStr = [NSString stringWithFormat:@"%d",i];
+            const char* _idStr = [idStr UTF8String] ;
+            //contact_log( _idStr);
+            
+            UnitySendMessage("ContactsListMessageReceiver", "OnContactReady", _idStr);
            
         }
         UnitySendMessage("ContactsListMessageReceiver", "OnInitializeDone","");
         
-        checkForRelease();
+       
+        
+        CFRelease(addressBook);
+        CFRelease(allPeople);
+        addressBook = NULL;
     }
     
     
     
-    void _LoadContactList()
+    void loadIOSContacts()
     {
         ABAuthorizationStatus status = ABAddressBookGetAuthorizationStatus();
         if (status == kABAuthorizationStatusDenied) {
@@ -125,16 +275,22 @@ extern "C" {
             // to contacts
             NSLog(@"permissin issu");
             [[[UIAlertView alloc] initWithTitle:nil message:@"This app requires access to your contacts to function properly. Please visit to the \"Privacy\" section in the iPhone Settings app." delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil] show];
+            
+            UnitySendMessage("ContactsListMessageReceiver", "OnInitializeFail","kABAuthorizationStatusDenied");
+            
             return;
         }
         CFErrorRef *error = NULL;
         addressBook = ABAddressBookCreateWithOptions(NULL, error );
         if (error) {
             NSLog(@"error: %@", CFBridgingRelease(error));
-            if (addressBook) CFRelease(addressBook);
+            if (addressBook) 
+				CFRelease(addressBook);
+			UnitySendMessage("ContactsListMessageReceiver", "OnInitializeFail","Can not create addressbook");
             return;
         }
-        if (status == kABAuthorizationStatusNotDetermined) {
+        if (status == kABAuthorizationStatusNotDetermined)
+        {
             
             // present the user the UI that requests permission to contacts ...
             
@@ -142,8 +298,10 @@ extern "C" {
                 if (granted) {
                     // if they gave you permission, then just carry on
                     
-                    listContacts();
-                } else {
+                    contact_listContacts();
+                }
+                else
+                {
                     // however, if they didn't give you permission, handle it gracefully, for example...
                     
                     dispatch_async(dispatch_get_main_queue(), ^{
@@ -151,6 +309,7 @@ extern "C" {
                         
                         [[[UIAlertView alloc] initWithTitle:nil message:@"This app requires access to your contacts to function properly. Please visit to the \"Privacy\" section in the iPhone Settings app." delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil] show];
                     });
+					UnitySendMessage("ContactsListMessageReceiver", "OnInitializeFail","kABAuthorizationStatusNotDetermined");
                 }
                 
                 //CFRelease(addressBook);
@@ -158,137 +317,15 @@ extern "C" {
         }
         else if( status == kABAuthorizationStatusAuthorized )
         {
-            listContacts();
+            contact_listContacts();
+        }
+        else
+        {
+            UnitySendMessage("ContactsListMessageReceiver", "OnInitializeFail","unknown issue");
         }
         
     }
     
-    char* GetMyPhoneNumber()
-    {
-        return aliessmael_MakeStringCopy("");
-    }
-    char* GetSimSerialNumber()
-    {
-        return aliessmael_MakeStringCopy("");
-    }
-	
-	char* GetNetworkOperator()
-    {
-        return aliessmael_MakeStringCopy("");
-    }
-	
-	char* GetNetworkCountryIso()
-    {
-        return aliessmael_MakeStringCopy("");
-    }
-	
-	int GetContactsCount()
-    {
-        int count = (int)nPeople;
-        NSLog(@"------user ask for conatcts count , count is %i" , count);
-        return count;
-    }
-	
-	char* GetContactId( int id )
-    {
-        return aliessmael_MakeStringCopy("");
-    }
-	
-	char* GetContactName( int index )
-    {
-        ContactItem* c = [contactItems objectAtIndex:index];
-        NSString* f = (c->firstName == NULL)?[[NSString alloc]init]:c->firstName ;
-        NSString* s = (c->lastName == NULL)?[[NSString alloc]init]:c->lastName ;
-        NSString* name = [NSString stringWithFormat:@"%@ %@",f,s];
-        return aliessmael_MakeStringCopy([name UTF8String]);
-    }
-	
-    int GetContactNumberCount( int index )
-    {
-        ContactItem* c = [contactItems objectAtIndex:index];
-        return c->phoneNumber.count;
-    }
-	char* GetContactNumber( int index , int phoneId )
-    {
-        ContactItem* c = [contactItems objectAtIndex:index];
-        if( c->phoneNumber == nil || c->phoneNumber.count == 0 )
-            return aliessmael_MakeStringCopy([@"empty" UTF8String]);
-        NSString* text = [c->phoneNumber objectAtIndex:phoneId];
-        return aliessmael_MakeStringCopy([text UTF8String]);
-    }
-	char* GetContactNumberType( int index , int phoneId )
-	{
-		ContactItem* c = [contactItems objectAtIndex:index];
-        if( c->phoneNumberType == nil || c->phoneNumberType.count == 0 )
-            return aliessmael_MakeStringCopy([@"empty" UTF8String]);
-        NSString* text = [c->phoneNumberType objectAtIndex:phoneId];
-        return aliessmael_MakeStringCopy([text UTF8String]);
-	}
-    int GetEmailsCount( int index )
-    {
-        ContactItem* c = [contactItems objectAtIndex:index];
-        if(c->emailsInitialized == false)
-        {
-            c->emails = [NSMutableArray new];
-            ABMultiValueRef emails = ABRecordCopyValue(c->person, kABPersonEmailProperty);
-            for (CFIndex j=0; j < ABMultiValueGetCount(emails); j++) {
-                NSString* email = ( __bridge NSString*)ABMultiValueCopyValueAtIndex(emails, j);
-                [c->emails addObject:email];
-                //[email release];
-            }
-            CFRelease(emails);
-            c->emailsInitialized =true;
-            checkForRelease();
-        }
-        return c->emails.count;
-    }
-	char* GetEmail( int index , int emailId )
-    {
-        ContactItem* c = [contactItems objectAtIndex:index];
-        if( c->emails == nil || c->emails.count == 0 )
-            return aliessmael_MakeStringCopy([@"empty" UTF8String]);
-        NSString* text = [c->emails objectAtIndex:emailId];
-        return aliessmael_MakeStringCopy([text UTF8String]);
-    }
-	
-	char* GetContactPhoto( int index )
-    {
-        ContactItem* c = [contactItems objectAtIndex:index];
-        if( c->imageInitialized == false )
-        {
-            UIImage *img = nil;
-            c->image = nil;
-            if (c->person != nil && ABPersonHasImageData(c->person)) {
-                if ( &ABPersonCopyImageDataWithFormat != nil ) {
-                    NSData * data = (__bridge NSData *)ABPersonCopyImageDataWithFormat(c->person, kABPersonImageFormatThumbnail);
-                    NSString *im = [data base64Encoding] ;
-                    const char* imc = [ im UTF8String ];
-                    c->image = aliessmael_MakeStringCopy(imc) ;
-                    // iOS >= 4.1
-                    // img= [UIImage imageWithData:(__bridge NSData *)ABPersonCopyImageDataWithFormat(c->person, kABPersonImageFormatThumbnail)];
-                } else {
-                    NSData * data = (__bridge NSData *)ABPersonCopyImageData(c->person);
-                    NSString *im = [data base64Encoding] ;
-                    const char* imc = [ im UTF8String ];
-                    c->image = aliessmael_MakeStringCopy(imc);
-                    // iOS < 4.1
-                    //img= [UIImage imageWithData:(__bridge NSData *)ABPersonCopyImageData(c->person)];
-                }
-                //CFRelease( img );
-                
-            } else {
-                img= nil;
-                c->image = nil;
-            }
-            c->imageInitialized = true;
-            checkForRelease();
-        }
-        if(c->image == nil)
-            return nil;
-        char* im = c->image ;
-        
-        return  im ;
-    }
 }
 
 

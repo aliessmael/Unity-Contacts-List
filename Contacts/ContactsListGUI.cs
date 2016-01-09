@@ -17,19 +17,20 @@ public class ContactsListGUI : MonoBehaviour {
 	Vector2 size ;
 	float   dragTime ;
 	float   dragSpeed ;
-	/*Texture2D getImage(string path , float width , float height )
-	{
-		Texture2D texture =  ( Texture2D  )Resources.Load( path , typeof(Texture2D  ));
-		return texture ;
-	}*/
+
+	string failString;
 	// Use this for initialization
 	void Start () {
-		//Invoke("loadContacts" , 5f );
+		
+		Contacts.LoadContactList( onDone, onLoadFailed );
 
+
+
+	
 		style = new GUIStyle();
 		style.font = font ;
 		style.fontSize = (int)(size.y / 2) ;
-		Contacts.LoadContactList();
+
 
 		size.x = Screen.width ;
 		size.y = Screen.height / 6 ;
@@ -66,10 +67,6 @@ public class ContactsListGUI : MonoBehaviour {
 		nonStyle2.alignment = TextAnchor.MiddleCenter ;
 	}
 
-	void loadContacts()
-	{
-
-	}
 
 	Vector2 downPos ;
 	Vector2 getDownPos()
@@ -143,7 +140,16 @@ public class ContactsListGUI : MonoBehaviour {
 	Vector2 oldContactsDrag ;
 	void OnGUI()
 	{
-
+		if (!string.IsNullOrEmpty (failString)) 
+		{
+			GUILayout.Label( "failed : " + failString );
+			if( GUILayout.Button("Retry"))
+			{
+				Contacts.LoadContactList( onDone, onLoadFailed );
+				failString = null;
+			}
+		}
+		//return;
 		getDownPos();
 
 		Vector2 drag = getDrag(); 
@@ -201,25 +207,18 @@ public class ContactsListGUI : MonoBehaviour {
 				GUILayout.BeginHorizontal( oddContactStyle ,GUILayout.Width( size.x) , GUILayout.Height( size.y ));
 			GUILayout.Label( i.ToString() , style );
 			Contact c = Contacts.ContactsList[i];
-			if( !c.PhotoIsLoaded )
+
+			if( c.PhotoTexture != null )
 			{
-				Contacts.LoadAsyncContactPhoto( i );
-			}
-			if( c.Photo != null )
-			{
-				
-				if( c.Photo != null && c.PhotoTexture == null )
-				{
-					c.PhotoTexture = new Texture2D(4,4);
-					c.PhotoTexture.LoadImage( c.Photo );
-				}
 				GUILayout.Box( new GUIContent(c.PhotoTexture) , GUILayout.Width(size.y), GUILayout.Height(size.y));
 			}
-			else {
+			else 
+			{
 				GUILayout.Box( new GUIContent(contactFaceStyle.normal.background) , GUILayout.Width(size.y), GUILayout.Height(size.y));
 			}
 
-			string text = "Name : " + c.Name + "\n";
+			string text = "Native Id : " + c.Id + "\n";
+			text += "Name : " + c.Name + "\n";
 			for(int p = 0 ; p < c.Phones.Count ; p++)
 			{
 				text +=  "Number : " + c.Phones[p].Number + " , Type " + c.Phones[p].Type  + " \n";
@@ -248,5 +247,16 @@ public class ContactsListGUI : MonoBehaviour {
 			GUILayout.EndHorizontal();
 		}
 		GUILayout.EndScrollView();
+	}
+
+
+	void onLoadFailed( string reason )
+	{
+		failString = reason;
+	}
+
+	void onDone()
+	{
+		failString = null;
 	}
 }
