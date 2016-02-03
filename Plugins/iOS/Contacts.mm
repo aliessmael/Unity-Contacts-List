@@ -242,8 +242,9 @@ extern "C" {
             
             contact_loadPhoneNumbers( c);
             
+			contact_loadEmails( c );
+			
             contact_loadPhoto( c );
-            
             
             [contactItems addObject:c];
             
