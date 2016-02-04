@@ -8,6 +8,8 @@
 
 #import "Contacts.h"
 #import <AddressBook/AddressBook.h>
+#include<pthread.h>
+
 @implementation Contacts
 
 
@@ -220,31 +222,32 @@ extern "C" {
     }
     
     
-    void contact_listContacts()
+    void* contact_load_thread( void *arg)
     {
         //ABRecordRef source = ABAddressBookCopyDefaultSource(addressBook);
         allPeople = ABAddressBookCopyArrayOfAllPeopleInSourceWithSortOrdering(addressBook, nil, kABPersonSortByFirstName);
         nPeople = ABAddressBookGetPersonCount( addressBook );
         // NSLog( @"error %@" , *error );
-       // NSLog( @"cont %ld" , nPeople );
+        // NSLog( @"cont %ld" , nPeople );
         contactItems = [NSMutableArray new];
         for ( int i = 0; i < nPeople; i++ )
         {
             ContactItem* c = [[ContactItem alloc]init];
             c->person = CFArrayGetValueAtIndex( allPeople, i );
-			if( c->person == nil)
-			{
-				NSLog( @"contact %d is empty" , i );
-				continue;
-			}
-           
+            if( c->person == nil)
+            {
+                NSLog( @"contact %d is empty" , i );
+                continue;
+            }
+            
             contact_loadName( c );
             
             contact_loadPhoneNumbers( c);
             
-			contact_loadEmails( c );
-			
+            contact_loadEmails( c );
+            
             contact_loadPhoto( c );
+            
             
             [contactItems addObject:c];
             
@@ -253,18 +256,22 @@ extern "C" {
             //contact_log( _idStr);
             
             UnitySendMessage("ContactsListMessageReceiver", "OnContactReady", _idStr);
-           
+            
         }
         UnitySendMessage("ContactsListMessageReceiver", "OnInitializeDone","");
         
-       
+        
         
         CFRelease(addressBook);
         CFRelease(allPeople);
         addressBook = NULL;
     }
     
-    
+    pthread_t thread = NULL;
+    void contact_listContacts()
+    {
+        pthread_create(&(thread), NULL, &contact_load_thread, NULL);
+    }
     
     void loadIOSContacts()
     {
