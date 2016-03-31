@@ -66,12 +66,9 @@ It works for Android and iOS</p>
 <p>&nbsp;</p>
 <p><strong>Slow Start <img src="icon_smile.gif" alt=":)" class="wp-smiley" /> </strong></p>
 <p>So how this is done and what you have to know to make your own GUI of managing your contacts.</p>
-<p>All magic come from Contacts class, you can check ContactsListGUI how it is using this class . before any thing you have to call Contacts.LoadContactList(); this will load all information to this class from your phones including photo as well.then check code below to know how to access your information</p>
-<p>int count = Contacts.GetContactsCount();<br>
-  for( int i = 0 ; i &lt; count ; i ++ ){<br>
-  &nbsp; &nbsp; &nbsp; &nbsp;Contact c = Contacts.ContactsList[i];<br>
-  }<br>
-  Note for iOS after build to xcode you have to add addressbook.framework to the project</p>
+<p>All magic come from Contacts class, you can check ContactsListGUI how it is using this class . before any thing you have to call Contacts.LoadContactList(); this will start loading (in seperate thread) all information to this class from your phones including photo as well.</p>
+<p>
+  Note for iOS after build to xcode you may need to add addressbook.framework to the project</p>
 <p><strong>Homework</strong></p>
 <p>go to all property of &#8220;Contact c&#8221; in previous code and print it to Console</p>
 <p>Any Question ?</p>
