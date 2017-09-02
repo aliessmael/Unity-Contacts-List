@@ -128,7 +128,7 @@ extern "C" {
     
     void contact_writeString( NSOutputStream *oStream, NSString* str )
     {
-        if( str == NULL )
+        if( str == NULL || str.length == 0 )
         {
             short size = 0;
             [oStream write:(uint8_t *)&size maxLength:2];
